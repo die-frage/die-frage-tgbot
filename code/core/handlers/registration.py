@@ -2,9 +2,10 @@ import requests
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from core.keybords.inline_boards import main_start_keyboard, main_final_keyboard
+from core.keybords.inline_boards import main_start_keyboard, main_final_keyboard, main_final_anonymous_keyboard
 from datetime import datetime
 from core.filters.RegistrationState import RegistrationState
+from core.filters.SurveyState import SurveyState
 
 
 async def get_start(message: Message, bot: Bot):
@@ -33,8 +34,26 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
         await state.update_data(data_begin=begin_formatted)
         await state.update_data(data_end=end_formatted)
         await state.update_data(title=data['title'])
-        await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
-        await state.set_state(RegistrationState.GET_NAME)
+        if not data['anonymous']:
+            await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
+            await state.set_state(RegistrationState.GET_NAME)
+        else:
+            data = await state.get_data()
+            data_begin = data['data_begin']
+            data_end = data['data_end']
+            title = data['title']
+            msg = f'<u>Проверьте</u> <u>данные</u>:\n\n' \
+                  f'<b>Опрос: </b>{title}\n' \
+                  f'<b>Начало: </b>{data_begin}\n' \
+                  f'<b>Конец: </b>{data_end}\n\n'
+
+            await bot.send_message(message.from_user.id, msg)
+
+            msg = "Если данные верны, то нажмите кнопку <b>начать опрос</b>\n" \
+                  "Если хотите изменить данные, то нажмите на кнопку <b>сбросить данные</b>"
+            await bot.send_message(message.from_user.id, msg, reply_markup=main_final_anonymous_keyboard)
+
+            await state.set_state(SurveyState.READY_ANONYMOUS)
     else:
         error_info = response.json()
         if error_info['message'] == 'SURVEY_NOT_FOUND':
@@ -81,3 +100,5 @@ async def process_group(message: Message, bot: Bot, state: FSMContext):
     msg = "Если данные верны, то нажмите кнопку <b>начать опрос</b>\n" \
           "Если хотите изменить данные, то нажмите на кнопку <b>сбросить данные</b>"
     await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
+    await state.set_state(SurveyState.READY_NOT_ANONYMOUS)
+
