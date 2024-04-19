@@ -6,15 +6,11 @@ async def set_commands(bot: Bot):
     commands = [
         BotCommand(
             command='start',
-            description='Пройти опрос'
+            description='Зарегистрироваться'
         ),
         BotCommand(
-            command='info',
-            description='Получить информацию'
-        ),
-        BotCommand(
-            command='prof',
-            description='Для организаторов'
+            command='run',
+            description='Начать опрос'
         )
     ]
 

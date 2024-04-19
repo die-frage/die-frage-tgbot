@@ -6,7 +6,7 @@ import requests
 from core.filters.RegistrationState import RegistrationState
 from core.filters.SurveyState import SurveyState
 
-url = 'http://localhost:8080/api/student/registration'
+url = 'http://localhost:8787/api/student/registration'
 headers = {
     'accept': 'application/json',
     'Content-Type': 'application/json'
@@ -16,7 +16,7 @@ headers = {
 async def registration(call: CallbackQuery, bot: Bot, state: FSMContext):
     if call.data == 'start_registration':
         await state.clear()
-        await call.message.answer("Введите код")
+        await call.message.answer("Введите код:")
         await state.set_state(RegistrationState.GET_CODE)
 
     if call.data == 'finish_registration':
@@ -30,8 +30,8 @@ async def registration(call: CallbackQuery, bot: Bot, state: FSMContext):
 
             response = requests.post(url, json=student_data, headers=headers)
             if response.status_code == 200:
-                await call.answer("Регистрация прошла успешно")
-                await call.message.answer("Регистрация прошла успешно")
+                await call.answer("Регистрация прошла успешно!")
+                await call.message.answer("Регистрация прошла успешно!")
             else:
                 error_info = response.json()
                 if error_info['message'] == 'INVALID_EMAIL_FORMAT':
@@ -41,3 +41,6 @@ async def registration(call: CallbackQuery, bot: Bot, state: FSMContext):
                     await call.answer("Ошибка!")
                     await call.message.answer("Неизвестная ошибка, попробуйте перезапустить код")
             await state.clear()
+        else:
+            await call.answer("Регистрация прошла успешно!")
+            await call.message.answer("Регистрация прошла успешно!")

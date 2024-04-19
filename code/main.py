@@ -1,14 +1,13 @@
 import asyncio
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 
 from core.filters.RegistrationState import RegistrationState
 from core.handlers.callback import registration
 from core.handlers.registration import get_start, process_code, process_name, process_mail, process_group
 from core.settings import settings
 from core.utils.commands import set_commands
-from aiogram.filters import Command
-from aiogram import F
 
 
 async def init(bot: Bot):
@@ -20,7 +19,7 @@ async def start():
     dp = Dispatcher()
 
     dp.startup.register(init)
-    dp.message.register(get_start, Command(commands=['start', 'run']))
+    dp.message.register(get_start, Command(commands=['start']))
     dp.callback_query.register(registration)
 
     dp.message.register(process_code, RegistrationState.GET_CODE)

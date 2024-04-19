@@ -2,22 +2,29 @@ import requests
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from core.keybords.inline_boards import main_start_keyboard, main_final_keyboard, main_final_anonymous_keyboard
+from core.keybords.inline_boards import main_start_keyboard, main_final_keyboard
 from datetime import datetime
 from core.filters.RegistrationState import RegistrationState
 from core.filters.SurveyState import SurveyState
 
 
-async def get_start(message: Message, bot: Bot):
-    msg = "Это телеграм бот для <b>проведения опросов</b>:\n\n 1. Если вы хотите создать опрос, то перейдите по " \
-          "ссылке: <a href='http://localhost:4200'>survey.com</a>\n\n 2. Если вы хотите пройти опрос:\n\t\t - от " \
-          "сканируйте <i>QR-код</i> через камеру телефона\n\t\t - введите <i>код</i>, нажав на кнопку Ввести код\n "
-    await bot.send_message(message.from_user.id, msg, reply_markup=main_start_keyboard)
+async def get_start(message: Message, bot: Bot, state: FSMContext):
+    text = message.text.replace("/start", "")
+    if len(text) < 1:
+        msg = "Это телеграм бот для <b>проведения опросов</b>"
+        await bot.send_message(message.from_user.id, msg)
+        msg = "Для создания опроса воспользуйтесь конструктором: <a href='http://localhost:4200'>survey.com</a>"
+        await bot.send_message(message.from_user.id, msg)
+        msg = "Для прохождения опроса отсканируйте <i>QR-код</i> через камеру телефона или введите <i>код</i>, " \
+              "нажав на кнопку\n "
+        await bot.send_message(message.from_user.id, msg, reply_markup=main_start_keyboard)
+    else:
+        await process_code(message, bot, state)
 
 
 async def process_code(message: Message, bot: Bot, state: FSMContext):
-    code = message.text
-    url = f'http://localhost:8080/api/student/survey/{code}'
+    code = message.text.replace("/start ", "")
+    url = f'http://localhost:8787/api/survey/code/{code}'
     headers = {
         'accept': 'application/json',
         'Content-Type': 'application/json'
@@ -25,7 +32,6 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        # Преобразование строк
         begin_datetime = datetime.fromisoformat(data['date_begin'][:-6])
         end_datetime = datetime.fromisoformat(data['date_end'][:-6])
         begin_formatted = begin_datetime.strftime('%H:%M %d.%m.%Y')
@@ -42,22 +48,19 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
             data_begin = data['data_begin']
             data_end = data['data_end']
             title = data['title']
-            msg = f'<u>Проверьте</u> <u>данные</u>:\n\n' \
+            msg = f'Проверьте данные:\n\n' \
                   f'<b>Опрос: </b>{title}\n' \
                   f'<b>Начало: </b>{data_begin}\n' \
                   f'<b>Конец: </b>{data_end}\n\n'
 
             await bot.send_message(message.from_user.id, msg)
-
-            msg = "Если данные верны, то нажмите кнопку <b>начать опрос</b>\n" \
-                  "Если хотите изменить данные, то нажмите на кнопку <b>сбросить данные</b>"
-            await bot.send_message(message.from_user.id, msg, reply_markup=main_final_anonymous_keyboard)
-
+            msg = "Данные правильные?"
+            await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
             await state.set_state(SurveyState.READY_ANONYMOUS)
     else:
         error_info = response.json()
         if error_info['message'] == 'SURVEY_NOT_FOUND':
-            await bot.send_message(message.from_user.id, "Опрос не найден, проверьте код еще раз")
+            await bot.send_message(message.from_user.id, "Опрос не найден, введите другой код!", reply_markup=main_start_keyboard)
             await state.clear()
             await state.set_state(RegistrationState.GET_CODE)
         else:
@@ -88,7 +91,7 @@ async def process_group(message: Message, bot: Bot, state: FSMContext):
     data_end = data['data_end']
     title = data['title']
 
-    msg = f'<u>Проверьте</u> <u>данные</u>:\n\n' \
+    msg = f'Проверьте данные:\n\n' \
           f'<b>Опрос: </b>{title}\n' \
           f'<b>Начало: </b>{data_begin}\n' \
           f'<b>Конец: </b>{data_end}\n\n' \
@@ -96,9 +99,6 @@ async def process_group(message: Message, bot: Bot, state: FSMContext):
           f'<b>Почта: </b>{mail}\n' \
           f'<b>Номер группы: </b>{group}'
     await bot.send_message(message.from_user.id, msg)
-
-    msg = "Если данные верны, то нажмите кнопку <b>начать опрос</b>\n" \
-          "Если хотите изменить данные, то нажмите на кнопку <b>сбросить данные</b>"
+    msg = "Данные правильные?"
     await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
     await state.set_state(SurveyState.READY_NOT_ANONYMOUS)
-
