@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+code/.idea/shelf/Uncommitted_changes_before_Update_at_23_03_24,_18_00_[Changes]/shelved.patch
+code/.idea/shelf/Uncommitted_changes_before_Update_at_23_03_24__18_00__Changes_.xml
+code/.idea/workspace.xml
 
 # C extensions
 *.so
@@ -161,3 +164,5 @@ cython_debug/
 
 .DS_Store
 settings.txt
+code/.idea/shelf/Uncommitted_changes_before_Update_at_23_03_24,_18_00_[Changes]/shelved.patch
+
