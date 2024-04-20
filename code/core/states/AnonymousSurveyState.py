@@ -1,7 +1,7 @@
 from aiogram.fsm.state import StatesGroup, State
 
 
-class SurveyAnonymous(StatesGroup):
+class AnonymousSurveyState(StatesGroup):
     REGISTERED = State()
     WAITING = State()
     TAKING_SURVEY = State()

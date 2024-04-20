@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-main_start_keyboard = InlineKeyboardMarkup(
+enter_code_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -11,7 +11,7 @@ main_start_keyboard = InlineKeyboardMarkup(
     ]
 )
 
-main_final_keyboard = InlineKeyboardMarkup(
+finish_registration_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -28,7 +28,7 @@ main_final_keyboard = InlineKeyboardMarkup(
     ]
 )
 
-waiting_survey_keyboard = InlineKeyboardMarkup(
+survey_menu_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -45,7 +45,7 @@ waiting_survey_keyboard = InlineKeyboardMarkup(
     ]
 )
 
-main_start_survey_keyboard = InlineKeyboardMarkup(
+start_survey_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(

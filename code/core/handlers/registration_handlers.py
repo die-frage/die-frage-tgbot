@@ -2,14 +2,17 @@ import requests
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from core.keybords.inline_boards import main_start_keyboard, main_final_keyboard
+from core.keybords.inline_keyboards import enter_code_keyboard, finish_registration_keyboard
 from datetime import datetime
-from core.filters.RegistrationState import RegistrationState
-from core.filters.SurveyAnonymous import SurveyAnonymous
-from core.filters.SurveyAuthorised import SurveyAuthorised
+from core.states.RegistrationState import RegistrationState
+from core.states.AnonymousSurveyState import AnonymousSurveyState
+from core.states.AuthorisedSurveyState import AuthorisedSurveyState
+
+# Urls
+url_get_survey_by_code = 'http://localhost:8787/api/survey/code/'
 
 
-async def get_start(message: Message, bot: Bot, state: FSMContext):
+async def handler_start(message: Message, bot: Bot, state: FSMContext):
     text = message.text.replace("/start", "")
     if len(text) < 1:
         msg = "Это телеграм бот для <b>проведения опросов</b>"
@@ -18,22 +21,18 @@ async def get_start(message: Message, bot: Bot, state: FSMContext):
         await bot.send_message(message.from_user.id, msg)
         msg = "Для прохождения опроса отсканируйте <i>QR-код</i> через камеру телефона или введите <i>код</i>, " \
               "нажав на кнопку\n "
-        await bot.send_message(message.from_user.id, msg, reply_markup=main_start_keyboard)
+        await bot.send_message(message.from_user.id, msg, reply_markup=enter_code_keyboard)
     else:
         await process_code(message, bot, state)
 
 
 async def process_code(message: Message, bot: Bot, state: FSMContext):
     code = message.text.replace("/start ", "")
-    url = f'http://localhost:8787/api/survey/code/{code}'
-    headers = {
-        'accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
+    url = url_get_survey_by_code + code
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
         data = response.json()
-        print(data)
         begin_datetime = datetime.fromisoformat(data['date_begin'][:-6])
         end_datetime = datetime.fromisoformat(data['date_end'][:-6])
         begin_formatted = begin_datetime.strftime('%H:%M %d.%m.%Y')
@@ -58,17 +57,10 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
 
             await bot.send_message(message.from_user.id, msg)
             msg = "Данные правильные?"
-            await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
-            await state.set_state(SurveyAnonymous.REGISTERED)
-    else:
-        error_info = response.json()
-        if error_info['message'] == 'SURVEY_NOT_FOUND':
-            await bot.send_message(message.from_user.id, "Опрос не найден, введите другой код!", reply_markup=main_start_keyboard)
-            await state.clear()
-            await state.set_state(RegistrationState.GET_CODE)
-        else:
-            await bot.send_message(message.from_user.id, "Неизвестная ошибка, попробуйте перезапустить бота")
-            await state.clear()
+            await bot.send_message(message.from_user.id, msg, reply_markup=finish_registration_keyboard)
+            await state.set_state(AnonymousSurveyState.REGISTERED)
+    except requests.exceptions.RequestException as e:
+        await handle_request_exception(message, bot, state, e)
 
 
 async def process_name(message: Message, bot: Bot, state: FSMContext):
@@ -103,5 +95,20 @@ async def process_group(message: Message, bot: Bot, state: FSMContext):
           f'<b>Номер группы: </b>{group}'
     await bot.send_message(message.from_user.id, msg)
     msg = "Данные правильные?"
-    await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
-    await state.set_state(SurveyAuthorised.REGISTERED)
+    await bot.send_message(message.from_user.id, msg, reply_markup=finish_registration_keyboard)
+    await state.set_state(AuthorisedSurveyState.REGISTERED)
+
+
+async def handle_request_exception(message: Message, bot: Bot, state: FSMContext, exception: Exception):
+    if isinstance(exception, requests.exceptions.HTTPError):
+        if exception.response.status_code == 404:
+            await bot.send_message(message.from_user.id, "Опрос не найден, введите другой код!",
+                                   reply_markup=enter_code_keyboard)
+            await state.clear()
+            await state.set_state(RegistrationState.GET_CODE)
+        else:
+            await bot.send_message(message.from_user.id, "Неизвестная ошибка, попробуйте перезапустить бота")
+            await state.clear()
+    else:
+        await bot.send_message(message.from_user.id, "Неизвестная ошибка, попробуйте перезапустить бота")
+        await state.clear()

@@ -10,7 +10,7 @@ async def set_commands(bot: Bot):
         ),
         BotCommand(
             command='survey',
-            description='Начать опрос'
+            description='Найти опрос'
         )
     ]
 

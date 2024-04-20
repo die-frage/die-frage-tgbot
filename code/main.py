@@ -2,15 +2,14 @@ import asyncio
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
-from aiogram import F
 
-from core.filters.RegistrationState import RegistrationState
-from core.filters.SurveyAuthorised import SurveyAuthorised
-from core.filters.SurveyAnonymous import SurveyAnonymous
+from core.states.RegistrationState import RegistrationState
+from core.states.AnonymousSurveyState import AnonymousSurveyState
+from core.states.AuthorisedSurveyState import AuthorisedSurveyState
 
-from core.handlers.callback import registration
-from core.handlers.registration import get_start, process_code, process_name, process_mail, process_group
-from core.handlers.waiting_survey import waiting_start_survey, answer_anonym_text_answer, answer_auth_text_answer
+from core.handlers.callback import callback
+from core.handlers.registration_handlers import handler_start, process_code, process_name, process_mail, process_group
+from core.handlers.survey_handlers import handler_of_start_survey, handler_of_anonymous_with_no_choice_answer, handler_of_authenticated_with_no_choice_answer
 from core.settings import settings
 from core.utils.commands import set_commands
 
@@ -24,18 +23,19 @@ async def start():
     dp = Dispatcher()
 
     dp.startup.register(init)
-    dp.message.register(get_start, Command(commands=['start']))
-    dp.callback_query.register(registration)
+    dp.message.register(handler_start, Command(commands=['start']))
+    dp.message.register(handler_of_start_survey, Command(commands=['survey']))
+    dp.message.register(handler_of_start_survey, AnonymousSurveyState.WAITING, AuthorisedSurveyState.WAITING)
+
+    dp.callback_query.register(callback)
 
     dp.message.register(process_code, RegistrationState.GET_CODE)
     dp.message.register(process_name, RegistrationState.GET_NAME)
     dp.message.register(process_mail, RegistrationState.GET_MAIL)
     dp.message.register(process_group, RegistrationState.GET_GROUP)
 
-    dp.message.register(waiting_start_survey, Command(commands=['survey']))
-    dp.message.register(waiting_start_survey, SurveyAnonymous.WAITING)
-    dp.message.register(answer_anonym_text_answer, SurveyAnonymous.TEXT_ANSWER_WAITING)
-    dp.message.register(answer_auth_text_answer, SurveyAuthorised.TEXT_ANSWER_WAITING)
+    dp.message.register(handler_of_anonymous_with_no_choice_answer, AnonymousSurveyState.TEXT_ANSWER_WAITING)
+    dp.message.register(handler_of_authenticated_with_no_choice_answer, AuthorisedSurveyState.TEXT_ANSWER_WAITING)
 
     try:
         await dp.start_polling(bot)
