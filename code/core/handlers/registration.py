@@ -5,7 +5,8 @@ from aiogram.types import Message
 from core.keybords.inline_boards import main_start_keyboard, main_final_keyboard
 from datetime import datetime
 from core.filters.RegistrationState import RegistrationState
-from core.filters.SurveyState import SurveyState
+from core.filters.SurveyAnonymous import SurveyAnonymous
+from core.filters.SurveyAuthorised import SurveyAuthorised
 
 
 async def get_start(message: Message, bot: Bot, state: FSMContext):
@@ -32,6 +33,7 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
+        print(data)
         begin_datetime = datetime.fromisoformat(data['date_begin'][:-6])
         end_datetime = datetime.fromisoformat(data['date_end'][:-6])
         begin_formatted = begin_datetime.strftime('%H:%M %d.%m.%Y')
@@ -40,6 +42,7 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
         await state.update_data(data_begin=begin_formatted)
         await state.update_data(data_end=end_formatted)
         await state.update_data(title=data['title'])
+        await state.update_data(survey_id=data['id'])
         if not data['anonymous']:
             await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
             await state.set_state(RegistrationState.GET_NAME)
@@ -56,7 +59,7 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
             await bot.send_message(message.from_user.id, msg)
             msg = "Данные правильные?"
             await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
-            await state.set_state(SurveyState.READY_ANONYMOUS)
+            await state.set_state(SurveyAnonymous.REGISTERED)
     else:
         error_info = response.json()
         if error_info['message'] == 'SURVEY_NOT_FOUND':
@@ -101,4 +104,4 @@ async def process_group(message: Message, bot: Bot, state: FSMContext):
     await bot.send_message(message.from_user.id, msg)
     msg = "Данные правильные?"
     await bot.send_message(message.from_user.id, msg, reply_markup=main_final_keyboard)
-    await state.set_state(SurveyState.READY_NOT_ANONYMOUS)
+    await state.set_state(SurveyAuthorised.REGISTERED)

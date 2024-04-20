@@ -9,7 +9,7 @@ async def set_commands(bot: Bot):
             description='Зарегистрироваться'
         ),
         BotCommand(
-            command='run',
+            command='survey',
             description='Начать опрос'
         )
     ]

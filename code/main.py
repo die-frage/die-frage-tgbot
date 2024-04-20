@@ -1,11 +1,16 @@
 import asyncio
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
+from aiogram import F
 
 from core.filters.RegistrationState import RegistrationState
+from core.filters.SurveyAuthorised import SurveyAuthorised
+from core.filters.SurveyAnonymous import SurveyAnonymous
+
 from core.handlers.callback import registration
 from core.handlers.registration import get_start, process_code, process_name, process_mail, process_group
+from core.handlers.waiting_survey import waiting_start_survey, answer_anonym_text_answer, answer_auth_text_answer
 from core.settings import settings
 from core.utils.commands import set_commands
 
@@ -26,6 +31,11 @@ async def start():
     dp.message.register(process_name, RegistrationState.GET_NAME)
     dp.message.register(process_mail, RegistrationState.GET_MAIL)
     dp.message.register(process_group, RegistrationState.GET_GROUP)
+
+    dp.message.register(waiting_start_survey, Command(commands=['survey']))
+    dp.message.register(waiting_start_survey, SurveyAnonymous.WAITING)
+    dp.message.register(answer_anonym_text_answer, SurveyAnonymous.TEXT_ANSWER_WAITING)
+    dp.message.register(answer_auth_text_answer, SurveyAuthorised.TEXT_ANSWER_WAITING)
 
     try:
         await dp.start_polling(bot)
