@@ -4,7 +4,7 @@ from aiogram.types import Message, CallbackQuery
 import requests
 
 # Keyboards
-from core.keybords.inline_boards import survey_menu_keyboard, next_question_keyboard, \
+from core.keybords.inline_keyboards import survey_menu_keyboard, next_question_keyboard, \
     next_and_back_question_keyboard, back_question_keyboard
 
 # URLs
