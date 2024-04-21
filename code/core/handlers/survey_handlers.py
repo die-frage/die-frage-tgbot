@@ -35,9 +35,10 @@ async def handler_of_authenticated_with_no_choice_answer(message: Message, bot: 
     await process_of_authenticated_with_no_choice_answer(message, bot, state, survey_id, student_id, question_index, answer, size_question)
 
 
-async def process_of_anonymous_with_choice_answer(call: CallbackQuery, survey_id: int, question_index: int,
+async def process_of_anonymous_with_choice_answer(call: CallbackQuery, state: FSMContext,
+                                                  survey_id: int, question_id: int,
                                                   answer_index: int, answer: str):
-    params = create_for_anonymous_params(survey_id, question_index, answer)
+    params = create_for_anonymous_params(survey_id, question_id, answer)
 
     try:
         response = requests.post(url_student_add_answer_anonymous, params=params)
@@ -45,14 +46,30 @@ async def process_of_anonymous_with_choice_answer(call: CallbackQuery, survey_id
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
         return
+
+    data = await state.get_data()
+    answers = data.get('answers', [])
+    is_found = False
+
+    for _answer in answers:
+        if _answer.get('question_id') == question_id:
+            _answer['response'] = answer
+            is_found = True
+            break
+
+    if not is_found:
+        new_answer = {'question_id': question_id, 'response': answer}
+        answers.append(new_answer)
+
+    await state.update_data(answers=answers)
 
     msg = "Ответ записан успешно.\nСледующий вопрос:"
     await call.message.answer(msg, reply_markup=next_question_keyboard)
 
 
-async def process_of_anonymous_with_no_choice_answer(message: Message, bot: Bot, state: FSMContext, survey_id: int,
-                                                     question_index: int, answer: str):
-    params = create_for_anonymous_params(survey_id, question_index, answer)
+async def process_of_anonymous_with_no_choice_answer(message: Message, bot: Bot, state: FSMContext,
+                                                     survey_id: int, question_id: int, answer: str):
+    params = create_for_anonymous_params(survey_id, question_id, answer)
 
     try:
         response = requests.post(url_student_add_answer_anonymous, params=params)
@@ -61,11 +78,28 @@ async def process_of_anonymous_with_no_choice_answer(message: Message, bot: Bot,
         print(f"Error: {e}")
         return
 
+    data = await state.get_data()
+    answers = data.get('answers', [])
+    is_found = False
+
+    for _answer in answers:
+        if _answer.get('question_id') == question_id:
+            _answer['response'] = answer
+            is_found = True
+            break
+
+    if not is_found:
+        new_answer = {'question_id': question_id, 'response': answer}
+        answers.append(new_answer)
+
+    await state.update_data(answers=answers)
+
     msg = "Ответ записан успешно.\nСледующий вопрос:"
     await bot.send_message(message.from_user.id, msg, reply_markup=next_question_keyboard)
 
 
-async def process_of_authenticated_with_choice_answer(call: CallbackQuery, survey_id: int, student_id: int,
+async def process_of_authenticated_with_choice_answer(call: CallbackQuery, state: FSMContext,
+                                                      survey_id: int, student_id: int,
                                                       question_id: int, answer_index: int,
                                                       answer: str, size_question: int):
     params = create_for_authenticated_params(survey_id, student_id, question_id, answer)
@@ -76,6 +110,22 @@ async def process_of_authenticated_with_choice_answer(call: CallbackQuery, surve
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
         return
+
+    data = await state.get_data()
+    answers = data.get('answers', [])
+    is_found = False
+
+    for _answer in answers:
+        if _answer.get('question_id') == question_id:
+            _answer['response'] = answer
+            is_found = True
+            break
+
+    if not is_found:
+        new_answer = {'question_id': question_id, 'response': answer}
+        answers.append(new_answer)
+
+    await state.update_data(answers=answers)
 
     msg = "Ответ записан успешно!"
     if question_id == 0:
@@ -97,7 +147,23 @@ async def process_of_authenticated_with_no_choice_answer(message: Message, bot: 
         print(f"Error: {e}")
         return
 
-    msg = "Ответ записан успешно"
+    data = await state.get_data()
+    answers = data.get('answers', [])
+    is_found = False
+
+    for _answer in answers:
+        if _answer.get('question_id') == question_id:
+            _answer['response'] = answer
+            is_found = True
+            break
+
+    if not is_found:
+        new_answer = {'question_id': question_id, 'response': answer}
+        answers.append(new_answer)
+
+    await state.update_data(answers=answers)
+
+    msg = "Ответ записан успешно."
     if question_id == 0:
         await bot.send_message(message.from_user.id, msg, reply_markup=next_question_keyboard)
     elif question_id + 1 < size_question:

@@ -7,3 +7,4 @@ class AnonymousSurveyState(StatesGroup):
     TAKING_SURVEY = State()
     MULTIPLE_ANSWER_WAITING = State()
     TEXT_ANSWER_WAITING = State()
+    ANSWERED = State()

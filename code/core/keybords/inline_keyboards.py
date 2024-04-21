@@ -98,3 +98,21 @@ next_and_back_question_keyboard = InlineKeyboardMarkup(
         ]
     ]
 )
+
+exit_from_survey_keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text='Выйти из опроса',
+                callback_data='exit_from_survey',
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text='Проверить опрос',
+                callback_data='update_survey',
+            )
+        ]
+    ]
+)
+

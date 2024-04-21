@@ -112,7 +112,3 @@ async def handle_request_exception(message: Message, bot: Bot, state: FSMContext
     else:
         await bot.send_message(message.from_user.id, "Неизвестная ошибка, попробуйте перезапустить бота")
         await state.clear()
-
-
-
-

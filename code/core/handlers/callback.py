@@ -9,13 +9,18 @@ from core.states.AuthorisedSurveyState import AuthorisedSurveyState
 from core.states.AnonymousSurveyState import AnonymousSurveyState
 from core.handlers.survey_handlers import process_of_anonymous_with_choice_answer, \
     process_of_authenticated_with_choice_answer
-from core.keybords.inline_keyboards import survey_menu_keyboard, start_survey_keyboard, enter_code_keyboard
+from core.keybords.inline_keyboards import survey_menu_keyboard, start_survey_keyboard, \
+    enter_code_keyboard, exit_from_survey_keyboard
 
 # Urls
 url_register_student = 'http://localhost:8787/api/student/registration'
+url_get_student_by_email = 'http://localhost:8787/api/student/'
 url_register_user_for_survey = 'http://localhost:8787/api/telegram/add/record'
 url_get_record = 'http://localhost:8787/api/telegram/record'
 url_get_survey = 'http://localhost:8787/api/survey/telegram'
+url_delete_record = 'http://localhost:8787/api/telegram/record'
+url_start_survey = 'http://localhost:8787/api/telegram/start/record'
+url_stop_survey = 'http://localhost:8787/api/telegram/stop/record'
 
 headers = {
     'accept': 'application/json',
@@ -31,7 +36,8 @@ async def start_registration(call: CallbackQuery, state: FSMContext):
 
 async def register_authorized_user(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    if await state.get_state() == AuthorisedSurveyState.REGISTERED:
+    res = await get_student_by_email(call, state, data['mail'])
+    if not res:
         student_data = {
             'email': data['mail'],
             'group_number': data['group'],
@@ -46,12 +52,8 @@ async def register_authorized_user(call: CallbackQuery, state: FSMContext):
             await register_user_for_survey(call, state, params)
         else:
             await call.answer("Ошибка!")
-            await call.message.answer("Неизвестная ошибка, попробуйте перезапустить код")
+            await call.message.answer("Вы уже зарегистрированы на опрос")
             await state.clear()
-    else:
-        await call.answer("Ошибка!")
-        await call.message.answer("Неизвестная ошибка, попробуйте перезапустить код")
-        await state.clear()
 
 
 async def register_anonymous_user(call: CallbackQuery, state: FSMContext):
@@ -68,9 +70,35 @@ async def register_user_for_survey(call: CallbackQuery, state: FSMContext, param
         await call.message.answer("Регистрация прошла успешно!", reply_markup=survey_menu_keyboard)
         await state.set_state(AnonymousSurveyState.WAITING)
     else:
-        await call.answer("Ошибка!")
-        await call.message.answer("Неизвестная ошибка, попробуйте перезапустить код")
-        await state.clear()
+        if response.json()['code'] == 'USER_ALREADY_EXISTS':
+            await call.answer("Уже зарегистрированы!")
+            msg = "Чтобы зарегистрироваться на новый опрос, необходимо выйти из старого."
+            await call.message.answer(msg, reply_markup=exit_from_survey_keyboard)
+            await state.clear()
+        elif response.json()['code'] == 'SURVEY_NOT_FOUND':
+            await call.answer("Опрос не найден!")
+            msg = "Чтобы зарегистрироваться на новый опрос, воспользуйтесь кнопками ниже: "
+            await call.message.answer(msg, reply_markup=exit_from_survey_keyboard)
+            await state.clear()
+        else:
+            print(response.json())
+            await call.answer("Ошибка!")
+            await call.message.answer("Неизвестная ошибка, попробуйте перезапустить бота.")
+            await state.clear()
+
+
+async def get_student_by_email(call: CallbackQuery, state: FSMContext, email: str):
+    data = await state.get_data()
+    url = url_get_student_by_email + email
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        await call.message.answer("Вы авторизированны.")
+        params = '?chat_id=' + str(call.message.chat.id) + \
+                 '&survey_id=' + str(data['survey_id'])
+        await register_user_for_survey(call, state, params)
+        return True
+    else:
+        return False
 
 
 async def check_user_registration(call: CallbackQuery, state: FSMContext):
@@ -128,7 +156,7 @@ async def get_survey(call: CallbackQuery, state: FSMContext):
             await call.message.answer(instructions_msg, reply_markup=start_survey_keyboard)
     else:
         await call.answer("Ошибка!")
-        await call.message.answer("Неизвестная ошибка, попробуйте перезапустить код")
+        await call.message.answer("Неизвестная ошибка, попробуйте перезапустить бота.")
         await state.clear()
 
 
@@ -212,14 +240,102 @@ async def start_next_question(call: CallbackQuery, state: FSMContext, is_anonymo
             else:
                 await state.set_state(AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING)
         else:
-            await call.message.answer(msg)
             if is_anonymous:
                 await state.set_state(AnonymousSurveyState.TEXT_ANSWER_WAITING)
             else:
-                await state.set_state(AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING)
+                await state.set_state(AuthorisedSurveyState.TEXT_ANSWER_WAITING)
+            await call.message.answer(msg)
+
+
+async def start_survey(call: CallbackQuery, state: FSMContext):
+    url = f'{url_start_survey}/{call.from_user.id}'
+    response = requests.post(url, headers=headers)
+    if response.status_code != 200:
+        if response.json()['code'] == 'USER_ALREADY_EXISTS':
+            await call.answer("Ошибка!")
+            await call.message.answer("Вы уже проходили данный опрос!")
+            await state.clear()
+            msg = "Опрос завершен!\n" \
+                  "Спасибо за участие!"
+            await call.message.answer(msg)
+            await call.answer("Опрос завершен!")
+            msg = "Это телеграм бот для <b>проведения опросов</b>"
+            await call.message.answer(msg)
+            msg = "Для создания опроса воспользуйтесь конструктором: <a href='http://localhost:4200'>survey.com</a>"
+            await call.message.answer(msg)
+            msg = "Для прохождения опроса сканируйте <i>QR-код</i> через камеру телефона или введите <i>код</i>, " \
+                  "нажав на кнопку\n "
+            await call.message.answer(msg, reply_markup=enter_code_keyboard)
+        else:
+            await call.answer("Ошибка!")
+            await call.message.answer("Неизвестная ошибка, попробуйте перезапустить бота.")
+            await state.clear()
+
+
+async def get_results(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    print(data)
+    answers = data['answers']
+    questions = data['questions']
+    total_score = 0
+    message = ""
+
+    for question in questions:
+        question_text = question['question']
+        correct_answer = question['correct_answers'][0]
+        score = question.get('points', 0)
+
+        found_answer = None
+        for answer in answers:
+            if answer.get('question_id') == question['question_id']:
+                found_answer = answer.get('response')
+                break
+
+        if found_answer is None:
+            message += f"Вопрос: {question_text}\n"
+            message += "Ваш ответ: Не дан\n"
+            if question['type_question'] == 'MULTIPLE':
+                message += f"Правильный ответ: {correct_answer}\n"
+                message += "Баллы: 0/{}\n\n".format(score)
+            else:
+                message += "Баллы: 0/{}\n\n".format(score)
+
+        else:
+            if found_answer == correct_answer:
+                total_score += score
+            message += f"Вопрос: {question_text}\n"
+            message += f"Ваш ответ: {found_answer}\n"
+            if question['type_question'] == 'MULTIPLE':
+                message += f"Правильный ответ: {correct_answer}\n"
+                message += "Баллы: {}/{}\n\n".format(score if found_answer == correct_answer else 0, score)
+            else:
+                message += "Баллы: 0/{}\n\n".format(score)
+
+    message += f"\nИтого Вы набрали: {total_score}/{sum(question.get('points', 0) for question in questions)} баллов."
+
+    await call.message.answer(message)
+
+
+async def stop_survey(call: CallbackQuery, state: FSMContext):
+    url = f'{url_stop_survey}/{call.from_user.id}'
+    response = requests.post(url, headers=headers)
+    if response.status_code == 200:
+        await call.answer("Результаты:")
+        await get_results(call, state)
+        await state.clear()
+    else:
+        if response.json()['code'] == 'USER_ALREADY_EXISTS':
+            await call.answer("Ошибка!")
+            await call.message.answer("Вы еще не прошли данный опрос!", reply_markup=survey_menu_keyboard)
+            await state.clear()
+        else:
+            await call.answer("Ошибка!")
+            await call.message.answer("Неизвестная ошибка, попробуйте перезапустить бота.")
+            await state.clear()
 
 
 async def finish_survey(call: CallbackQuery, state: FSMContext):
+    await stop_survey(call, state)
     await state.clear()
     msg = "Опрос завершен!\n" \
           "Спасибо за участие!"
@@ -275,15 +391,31 @@ async def process_callback_with_choice_answer(call: CallbackQuery, state: FSMCon
         answer_index = int(data[1])
         answer = data[2]
         if user_state == AnonymousSurveyState.MULTIPLE_ANSWER_WAITING:
-            await process_of_anonymous_with_choice_answer(call, survey_data['survey_id'],
+            await process_of_anonymous_with_choice_answer(call, state, survey_data['survey_id'],
                                                           survey_data['current_question'], answer_index, answer)
         elif user_state == AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING:
-            await process_of_authenticated_with_choice_answer(call, survey_data['survey_id'],
+            await process_of_authenticated_with_choice_answer(call, state, survey_data['survey_id'],
                                                               survey_data['student_id'],
                                                               survey_data['current_question'], answer_index,
                                                               answer, survey_data['size_questions'])
     if survey_data['current_question'] + 1 == survey_data['size_questions']:
         await finish_survey(call, state)
+
+
+async def exit_from_survey(call: CallbackQuery, state: FSMContext):
+    response = requests.delete(f'{url_get_record}/{call.message.chat.id}', headers=headers)
+    if response.status_code == 200:
+        msg = "Это телеграм бот для <b>проведения опросов</b>"
+        await call.message.answer(msg)
+        msg = "Для создания опроса воспользуйтесь конструктором: <a href='http://localhost:4200'>survey.com</a>"
+        await call.message.answer(msg)
+        msg = "Для прохождения опроса сканируйте <i>QR-код</i> через камеру телефона или введите <i>код</i>, " \
+              "нажав на кнопку\n "
+        await call.message.answer(msg, reply_markup=enter_code_keyboard)
+    else:
+        await call.answer("Ошибка!")
+        await call.message.answer("Неизвестная ошибка, попробуйте перезапустить бота.")
+        await state.clear()
 
 
 async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
@@ -310,9 +442,9 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
                 student_id = response_data['student_id']
                 await state.update_data(student_id=student_id)
             url = f'{url_get_survey}/{survey_id}'
-
             response = requests.get(url, headers=headers)
             if response.status_code == 200:
+                await start_survey(call, state)
                 data = response.json()
                 questions = data['questions']
                 if data['anonymous']:
@@ -326,6 +458,10 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
     if call.data == 'finish_survey':
         await finish_survey(call, state)
 
+    if call.data == 'exit_from_survey':
+        if await check_user_registration(call, state) is not None:
+            await exit_from_survey(call, state)
+
     user_state = await state.get_state()
     is_authorised_choice = user_state == AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING
     is_authorised_no_choice = user_state == AuthorisedSurveyState.TEXT_ANSWER_WAITING
@@ -335,7 +471,7 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
     if call.data == 'next_question':
         if is_anonymous_no_choice or is_anonymous_choice:
             await start_next_question(call, state, True)
-        elif is_authorised_choice or user_state == is_authorised_no_choice:
+        elif is_authorised_choice or is_authorised_no_choice:
             await start_next_question(call, state, False)
     elif call.data == 'back_question':
         if is_authorised_no_choice or is_authorised_choice:
