@@ -5,7 +5,7 @@ from aiogram.filters import Command
 
 from core.states.RegistrationState import RegistrationState
 from core.states.AnonymousSurveyState import AnonymousSurveyState
-from core.states.AuthorisedSurveyState import AuthorisedSurveyState
+from core.states.AuthorisedSurveyState import SurveyState
 
 from core.handlers.callback import callback
 from core.handlers.registration_handlers import handler_start, process_code, process_name, process_mail, process_group
@@ -25,7 +25,7 @@ async def start():
     dp.startup.register(init)
     dp.message.register(handler_start, Command(commands=['start']))
     dp.message.register(handler_of_start_survey, Command(commands=['survey']))
-    dp.message.register(handler_of_start_survey, AnonymousSurveyState.WAITING, AuthorisedSurveyState.WAITING)
+    dp.message.register(handler_of_start_survey, AnonymousSurveyState.WAITING, SurveyState.WAITING)
 
     dp.callback_query.register(callback)
 
@@ -35,7 +35,7 @@ async def start():
     dp.message.register(process_group, RegistrationState.GET_GROUP)
 
     dp.message.register(handler_of_anonymous_with_no_choice_answer, AnonymousSurveyState.TEXT_ANSWER_WAITING)
-    dp.message.register(handler_of_authenticated_with_no_choice_answer, AuthorisedSurveyState.TEXT_ANSWER_WAITING)
+    dp.message.register(handler_of_authenticated_with_no_choice_answer, SurveyState.TEXT_ANSWER_WAITING)
 
     try:
         await dp.start_polling(bot)

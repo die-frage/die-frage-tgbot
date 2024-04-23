@@ -5,8 +5,7 @@ from aiogram.types import Message
 from core.keybords.inline_keyboards import enter_code_keyboard, finish_registration_keyboard
 from datetime import datetime
 from core.states.RegistrationState import RegistrationState
-from core.states.AnonymousSurveyState import AnonymousSurveyState
-from core.states.AuthorisedSurveyState import AuthorisedSurveyState
+from core.states.AuthorisedSurveyState import SurveyState
 
 # Urls
 url_get_survey_by_code = 'http://localhost:8787/api/survey/code/'
@@ -42,23 +41,8 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
         await state.update_data(data_end=end_formatted)
         await state.update_data(title=data['title'])
         await state.update_data(survey_id=data['id'])
-        if not data['anonymous']:
-            await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
-            await state.set_state(RegistrationState.GET_NAME)
-        else:
-            data = await state.get_data()
-            data_begin = data['data_begin']
-            data_end = data['data_end']
-            title = data['title']
-            msg = f'Проверьте данные:\n\n' \
-                  f'<b>Опрос: </b>{title}\n' \
-                  f'<b>Начало: </b>{data_begin}\n' \
-                  f'<b>Конец: </b>{data_end}\n\n'
-
-            await bot.send_message(message.from_user.id, msg)
-            msg = "Данные правильные?"
-            await bot.send_message(message.from_user.id, msg, reply_markup=finish_registration_keyboard)
-            await state.set_state(AnonymousSurveyState.REGISTERED)
+        await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
+        await state.set_state(RegistrationState.GET_NAME)
     except requests.exceptions.RequestException as e:
         await handle_request_exception(message, bot, state, e)
 
@@ -96,7 +80,7 @@ async def process_group(message: Message, bot: Bot, state: FSMContext):
     await bot.send_message(message.from_user.id, msg)
     msg = "Данные правильные?"
     await bot.send_message(message.from_user.id, msg, reply_markup=finish_registration_keyboard)
-    await state.set_state(AuthorisedSurveyState.REGISTERED)
+    await state.set_state(SurveyState.REGISTERED)
 
 
 async def handle_request_exception(message: Message, bot: Bot, state: FSMContext, exception: Exception):

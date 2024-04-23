@@ -5,10 +5,8 @@ import requests
 from datetime import datetime
 
 from core.states.RegistrationState import RegistrationState
-from core.states.AuthorisedSurveyState import AuthorisedSurveyState
-from core.states.AnonymousSurveyState import AnonymousSurveyState
-from core.handlers.survey_handlers import process_of_anonymous_with_choice_answer, \
-    process_of_authenticated_with_choice_answer
+from core.states.SurveyState import SurveyState
+from core.handlers.survey_handlers import process_of_authenticated_with_choice_answer
 from core.keybords.inline_keyboards import survey_menu_keyboard, start_survey_keyboard, \
     enter_code_keyboard, exit_from_survey_keyboard
 
@@ -56,19 +54,12 @@ async def register_authorized_user(call: CallbackQuery, state: FSMContext):
             await state.clear()
 
 
-async def register_anonymous_user(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    params = '?chat_id=' + str(call.message.chat.id) + \
-             '&survey_id=' + str(data['survey_id'])
-    await register_user_for_survey(call, state, params)
-
-
 async def register_user_for_survey(call: CallbackQuery, state: FSMContext, params):
     response = requests.post(url_register_user_for_survey + params, headers=headers)
     if response.status_code == 200:
         await call.answer("Регистрация прошла успешно!")
         await call.message.answer("Регистрация прошла успешно!", reply_markup=survey_menu_keyboard)
-        await state.set_state(AnonymousSurveyState.WAITING)
+        await state.set_state(SurveyState.WAITING)
     else:
         if response.json()['code'] == 'USER_ALREADY_EXISTS':
             await call.answer("Уже зарегистрированы!")
@@ -160,14 +151,11 @@ async def get_survey(call: CallbackQuery, state: FSMContext):
         await state.clear()
 
 
-async def start_first_question(call: CallbackQuery, state: FSMContext, questions, is_anonymous: bool):
+async def start_first_question(call: CallbackQuery, state: FSMContext, questions):
     await state.update_data(questions=questions)
     await state.update_data(size_questions=len(questions))
     await state.update_data(current_question=0)
-    if is_anonymous:
-        await state.set_state(AnonymousSurveyState.TAKING_SURVEY)
-    else:
-        await state.set_state(AuthorisedSurveyState.TAKING_SURVEY)
+    await state.set_state(SurveyState.TAKING_SURVEY)
     survey_data = await state.get_data()
     current_question = survey_data['current_question']
     question = survey_data['questions'][current_question]
@@ -191,20 +179,14 @@ async def start_first_question(call: CallbackQuery, state: FSMContext, questions
         reply_markup = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=option, callback_data=f'answer_{index}_{option}')] for
                              index, option in enumerate(options, 1)])
-        if is_anonymous:
-            await state.set_state(AnonymousSurveyState.MULTIPLE_ANSWER_WAITING)
-        else:
-            await state.set_state(AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING)
+        await state.set_state(SurveyState.MULTIPLE_ANSWER_WAITING)
         await call.message.answer(msg, reply_markup=reply_markup)
     else:
-        if is_anonymous:
-            await state.set_state(AnonymousSurveyState.TEXT_ANSWER_WAITING)
-        else:
-            await state.set_state(AuthorisedSurveyState.TEXT_ANSWER_WAITING)
+        await state.set_state(SurveyState.TEXT_ANSWER_WAITING)
         await call.message.answer(msg)
 
 
-async def start_next_question(call: CallbackQuery, state: FSMContext, is_anonymous: bool):
+async def start_next_question(call: CallbackQuery, state: FSMContext):
     survey_data = await state.get_data()
     current_question = survey_data['current_question']
     if current_question + 1 == survey_data['size_questions']:
@@ -235,15 +217,9 @@ async def start_next_question(call: CallbackQuery, state: FSMContext, is_anonymo
                 inline_keyboard=[[InlineKeyboardButton(text=option, callback_data=f'answer_{index}_{option}')] for
                                  index, option in enumerate(options, 1)])
             await call.message.answer(msg, reply_markup=reply_markup)
-            if is_anonymous:
-                await state.set_state(AnonymousSurveyState.MULTIPLE_ANSWER_WAITING)
-            else:
-                await state.set_state(AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING)
+            await state.set_state(SurveyState.MULTIPLE_ANSWER_WAITING)
         else:
-            if is_anonymous:
-                await state.set_state(AnonymousSurveyState.TEXT_ANSWER_WAITING)
-            else:
-                await state.set_state(AuthorisedSurveyState.TEXT_ANSWER_WAITING)
+            await state.set_state(SurveyState.TEXT_ANSWER_WAITING)
             await call.message.answer(msg)
 
 
@@ -378,10 +354,10 @@ async def start_back_question(call: CallbackQuery, state: FSMContext):
             inline_keyboard=[[InlineKeyboardButton(text=option, callback_data=f'answer_{index}_{option}')] for
                              index, option in enumerate(options, 1)])
         await call.message.answer(msg, reply_markup=reply_markup)
-        await state.set_state(AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING)
+        await state.set_state(SurveyState.MULTIPLE_ANSWER_WAITING)
     else:
         await call.message.answer(msg)
-        await state.set_state(AuthorisedSurveyState.TEXT_ANSWER_WAITING)
+        await state.set_state(SurveyState.TEXT_ANSWER_WAITING)
 
 
 async def process_callback_with_choice_answer(call: CallbackQuery, state: FSMContext, user_state):
@@ -390,10 +366,7 @@ async def process_callback_with_choice_answer(call: CallbackQuery, state: FSMCon
         data = call.data.split('_')
         answer_index = int(data[1])
         answer = data[2]
-        if user_state == AnonymousSurveyState.MULTIPLE_ANSWER_WAITING:
-            await process_of_anonymous_with_choice_answer(call, state, survey_data['survey_id'],
-                                                          survey_data['current_question'], answer_index, answer)
-        elif user_state == AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING:
+        if user_state == SurveyState.MULTIPLE_ANSWER_WAITING:
             await process_of_authenticated_with_choice_answer(call, state, survey_data['survey_id'],
                                                               survey_data['student_id'],
                                                               survey_data['current_question'], answer_index,
@@ -424,10 +397,8 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
         await start_registration(call, state)
 
     if call.data == 'finish_registration':
-        if await state.get_state() == AuthorisedSurveyState.REGISTERED:
+        if await state.get_state() == SurveyState.REGISTERED:
             await register_authorized_user(call, state)
-        else:
-            await register_anonymous_user(call, state)
 
     if call.data == 'update_survey':
         if await check_user_registration(call, state) is not None:
@@ -447,13 +418,10 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
                 await start_survey(call, state)
                 data = response.json()
                 questions = data['questions']
-                if data['anonymous']:
-                    await start_first_question(call, state, questions, True)
-                else:
-                    data = await state.get_data()
-                    student_id = data['survey_id']
-                    await state.update_data(student_id=student_id)
-                    await start_first_question(call, state, questions, False)
+                data = await state.get_data()
+                student_id = data['survey_id']
+                await state.update_data(student_id=student_id)
+                await start_first_question(call, state, questions)
 
     if call.data == 'finish_survey':
         await finish_survey(call, state)
@@ -463,18 +431,14 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
             await exit_from_survey(call, state)
 
     user_state = await state.get_state()
-    is_authorised_choice = user_state == AuthorisedSurveyState.MULTIPLE_ANSWER_WAITING
-    is_authorised_no_choice = user_state == AuthorisedSurveyState.TEXT_ANSWER_WAITING
-    is_anonymous_choice = user_state == AnonymousSurveyState.MULTIPLE_ANSWER_WAITING
-    is_anonymous_no_choice = user_state == AnonymousSurveyState.TEXT_ANSWER_WAITING
+    is_authorised_choice = user_state == SurveyState.MULTIPLE_ANSWER_WAITING
+    is_authorised_no_choice = user_state == SurveyState.TEXT_ANSWER_WAITING
 
     if call.data == 'next_question':
-        if is_anonymous_no_choice or is_anonymous_choice:
-            await start_next_question(call, state, True)
-        elif is_authorised_choice or is_authorised_no_choice:
-            await start_next_question(call, state, False)
+        if is_authorised_choice or is_authorised_no_choice:
+            await start_next_question(call, state)
     elif call.data == 'back_question':
         if is_authorised_no_choice or is_authorised_choice:
             await start_back_question(call, state)
-    elif is_anonymous_choice or is_authorised_choice:
+    elif is_authorised_choice:
         await process_callback_with_choice_answer(call, state, user_state)
