@@ -5,10 +5,11 @@ from aiogram.types import Message
 from core.keybords.inline_keyboards import enter_code_keyboard, finish_registration_keyboard
 from datetime import datetime
 from core.states.RegistrationState import RegistrationState
-from core.states.AuthorisedSurveyState import SurveyState
+from core.states.SurveyState import SurveyState
 
-# Urls
 url_get_survey_by_code = 'http://localhost:8787/api/survey/code/'
+url_check_student_by_chat_id = 'http://localhost:8787/api/student/by_chat_id/'
+url_get_user_from_scheduler = 'http://localhost:8060/api/telegram/by_chat_id/'
 
 
 async def handler_start(message: Message, bot: Bot, state: FSMContext):
@@ -19,10 +20,18 @@ async def handler_start(message: Message, bot: Bot, state: FSMContext):
         msg = "Для создания опроса воспользуйтесь конструктором: <a href='http://localhost:4200'>survey.com</a>"
         await bot.send_message(message.from_user.id, msg)
         msg = "Для прохождения опроса отсканируйте <i>QR-код</i> через камеру телефона или введите <i>код</i>, " \
-              "нажав на кнопку\n "
+            "нажав на кнопку\n "
         await bot.send_message(message.from_user.id, msg, reply_markup=enter_code_keyboard)
     else:
         await process_code(message, bot, state)
+
+
+async def is_student_registered(chat_id: int) -> bool:
+    url = url_check_student_by_chat_id + str(chat_id)
+    response = requests.get(url)
+    if response.status_code == 200:
+        return True
+    return False
 
 
 async def process_code(message: Message, bot: Bot, state: FSMContext):
@@ -41,8 +50,18 @@ async def process_code(message: Message, bot: Bot, state: FSMContext):
         await state.update_data(data_end=end_formatted)
         await state.update_data(title=data['title'])
         await state.update_data(survey_id=data['id'])
-        await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
-        await state.set_state(RegistrationState.GET_NAME)
+        if await is_student_registered(message.chat.id):
+            url = url_check_student_by_chat_id + str(message.chat.id)
+            response = requests.get(url)
+            if response.status_code == 200:
+                data_student = response.json()
+                await state.update_data(name=data_student['name'])
+                await state.update_data(mail=data_student['email'])
+                await state.update_data(group=data_student['group_number'])
+                await process_group(message, bot, state, True)
+        else:
+            await bot.send_message(message.from_user.id, "Введите <b>ФИО</b> ")
+            await state.set_state(RegistrationState.GET_NAME)
     except requests.exceptions.RequestException as e:
         await handle_request_exception(message, bot, state, e)
 
@@ -59,16 +78,27 @@ async def process_mail(message: Message, bot: Bot, state: FSMContext):
     await state.set_state(RegistrationState.GET_GROUP)
 
 
-async def process_group(message: Message, bot: Bot, state: FSMContext):
-    await state.update_data(group=message.text)
+async def process_group(message: Message, bot: Bot, state: FSMContext, is_updated=False):
+    if not is_updated:
+        await state.update_data(group=message.text)
 
+    await state.update_data(is_updated=is_updated)
     data = await state.get_data()
+
     name = data['name']
     mail = data['mail']
     group = data['group']
     data_begin = data['data_begin']
     data_end = data['data_end']
     title = data['title']
+
+    # check if user already took survey:
+    url = url_get_user_from_scheduler + str(message.chat.id)
+    response = requests.get(url)
+    if response.json() == True:
+        await bot.send_message(message.from_user.id, "Вы уже проходили данный опрос!")
+        await state.clear()
+        return
 
     msg = f'Проверьте данные:\n\n' \
           f'<b>Опрос: </b>{title}\n' \

@@ -12,13 +12,15 @@ from core.keybords.inline_keyboards import survey_menu_keyboard, start_survey_ke
 
 # Urls
 url_register_student = 'http://localhost:8787/api/student/registration'
+url_update_student = 'http://localhost:8787/api/student/update'
 url_get_student_by_email = 'http://localhost:8787/api/student/'
-url_register_user_for_survey = 'http://localhost:8787/api/telegram/add/record'
-url_get_record = 'http://localhost:8787/api/telegram/record'
+url_get_student_by_chat_id = 'http://localhost:8787/api/student/by_chat_id/'
+url_register_user_for_survey = 'http://localhost:8060/api/telegram/add/record'
+url_get_record = 'http://localhost:8060/api/telegram/record'
 url_get_survey = 'http://localhost:8787/api/survey/telegram'
-url_delete_record = 'http://localhost:8787/api/telegram/record'
-url_start_survey = 'http://localhost:8787/api/telegram/start/record'
-url_stop_survey = 'http://localhost:8787/api/telegram/stop/record'
+url_delete_record = 'http://localhost:8060/api/telegram/record'
+url_start_survey = 'http://localhost:8060/api/telegram/start/record'
+url_stop_survey = 'http://localhost:8060/api/telegram/stop/record'
 
 headers = {
     'accept': 'application/json',
@@ -34,19 +36,31 @@ async def start_registration(call: CallbackQuery, state: FSMContext):
 
 async def register_authorized_user(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
+    is_updating = data.get('is_updating', False)
+    if is_updating:
+        student_data = {
+            'email': data['mail'],
+            'group_number': data['group'],
+            'chat_id': str(call.message.chat.id),
+            'name': data['name']
+        }
+        response = requests.post(url_update_student, json=student_data, headers=headers)
+        if response.status_code != 200:
+            await call.answer("Ошибка!")
+            await call.message.answer("Вы уже зарегистрированы на опрос")
+            await state.clear()
     res = await get_student_by_email(call, state, data['mail'])
     if not res:
         student_data = {
             'email': data['mail'],
             'group_number': data['group'],
+            'chat_id': str(call.message.chat.id),
             'name': data['name']
         }
         response = requests.post(url_register_student, json=student_data, headers=headers)
         if response.status_code == 200:
-            response_data = response.json()
             params = '?chat_id=' + str(call.message.chat.id) + \
-                     '&survey_id=' + str(data['survey_id']) + \
-                     '&student_id=' + str(response_data['student_id'])
+                     '&survey_id=' + str(data['survey_id'])
             await register_user_for_survey(call, state, params)
         else:
             await call.answer("Ошибка!")
@@ -55,7 +69,9 @@ async def register_authorized_user(call: CallbackQuery, state: FSMContext):
 
 
 async def register_user_for_survey(call: CallbackQuery, state: FSMContext, params):
-    response = requests.post(url_register_user_for_survey + params, headers=headers)
+    url = url_register_user_for_survey + params
+    print(url)
+    response = requests.post(url, headers=headers)
     if response.status_code == 200:
         await call.answer("Регистрация прошла успешно!")
         await call.message.answer("Регистрация прошла успешно!", reply_markup=survey_menu_keyboard)
@@ -80,8 +96,11 @@ async def register_user_for_survey(call: CallbackQuery, state: FSMContext, param
 
 async def get_student_by_email(call: CallbackQuery, state: FSMContext, email: str):
     data = await state.get_data()
-    url = url_get_student_by_email + email
-    response = requests.get(url, headers=headers)
+    url = url_get_student_by_email
+    params = {
+        'email': email,
+    }
+    response = requests.get(url, params=params, headers=headers)
     if response.status_code == 200:
         await call.message.answer("Вы авторизированны.")
         params = '?chat_id=' + str(call.message.chat.id) + \
@@ -94,6 +113,7 @@ async def get_student_by_email(call: CallbackQuery, state: FSMContext, email: st
 
 async def check_user_registration(call: CallbackQuery, state: FSMContext):
     response = requests.get(f'{url_get_record}/{call.message.chat.id}', headers=headers)
+    print(response.json())
     if response.status_code == 200:
         data = response.json()
         survey_id = data['survey_id']
@@ -137,14 +157,8 @@ async def get_survey(call: CallbackQuery, state: FSMContext):
             attention_msg = 'Внимание! ОПРОС МОЖНО НАЧАТЬ ПРОХОДИТЬ. ' \
                             'После нажатия на кнопку "Начать опрос" ' \
                             'отменить это действие будет нельзя.'
-            instructions_msg = 'Важно! Если это не анонимный опрос, ' \
-                               'то вы можете переходить между вопросами с ' \
-                               'помощью кнопок вперед и назад. ' \
-                               'Иначе у вас будет всего одна попытка ответа ' \
-                               'на каждый вопрос. Кнопка "Начать опрос".'
             await call.message.answer(survey_details_msg)
-            await call.message.answer(attention_msg)
-            await call.message.answer(instructions_msg, reply_markup=start_survey_keyboard)
+            await call.message.answer(attention_msg, reply_markup=start_survey_keyboard)
     else:
         await call.answer("Ошибка!")
         await call.message.answer("Неизвестная ошибка, попробуйте перезапустить бота.")
@@ -205,7 +219,10 @@ async def start_next_question(call: CallbackQuery, state: FSMContext):
         if question['time_limit_sec']:
             minutes = question['time_limit_sec'] // 60
             seconds = question['time_limit_sec'] % 60
-            msg += f"Время ответа на вопрос: {minutes} минут {seconds} сек\n"
+            if minutes == 0:
+                msg += f"Время ответа на вопрос: {seconds} сек\n"
+            else:
+                msg += f"Время ответа на вопрос: {minutes} минут {seconds} сек\n"
         msg += f"<b>\n{question_text}</b>\n"
         msg += f"{'Выбрать правильный ответ' if question_type == 'MULTIPLE' else 'Записать решение'}\n"
 
@@ -258,17 +275,22 @@ async def get_results(call: CallbackQuery, state: FSMContext):
 
     for question in questions:
         question_text = question['question']
-        correct_answer = question['correct_answers'][0]
+        if len(question['correct_answers']) < 1:
+            correct_answer = ''
+        else:
+            correct_answer = question['correct_answers'][0]
         score = question.get('points', 0)
 
         found_answer = None
+        counter = 0
         for answer in answers:
+            counter = counter + 1
             if answer.get('question_id') == question['question_id']:
                 found_answer = answer.get('response')
                 break
 
         if found_answer is None:
-            message += f"Вопрос: {question_text}\n"
+            message += f"<b>#{counter} Вопрос: {question_text}</b>\n"
             message += "Ваш ответ: Не дан\n"
             if question['type_question'] == 'MULTIPLE':
                 message += f"Правильный ответ: {correct_answer}\n"
@@ -279,7 +301,7 @@ async def get_results(call: CallbackQuery, state: FSMContext):
         else:
             if found_answer == correct_answer:
                 total_score += score
-            message += f"Вопрос: {question_text}\n"
+            message += f"<b>#{counter} Вопрос: {question_text}</b>\n"
             message += f"Ваш ответ: {found_answer}\n"
             if question['type_question'] == 'MULTIPLE':
                 message += f"Правильный ответ: {correct_answer}\n"
@@ -327,7 +349,6 @@ async def finish_survey(call: CallbackQuery, state: FSMContext):
 
 
 async def start_back_question(call: CallbackQuery, state: FSMContext):
-    await start_back_question(call, state)
     survey_data = await state.get_data()
     current_question = survey_data['current_question']
     current_question = current_question - 1
@@ -412,6 +433,12 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
             if 'student_id' in response_data:
                 student_id = response_data['student_id']
                 await state.update_data(student_id=student_id)
+            else :
+                response = requests.get(url_get_student_by_chat_id + str(call.message.chat.id), headers=headers)
+                tmp_data = response.json()
+                print(tmp_data)
+                student_id = tmp_data['student_id']
+                await state.update_data(student_id=student_id)
             url = f'{url_get_survey}/{survey_id}'
             response = requests.get(url, headers=headers)
             if response.status_code == 200:
@@ -419,7 +446,7 @@ async def callback(call: CallbackQuery, bot: Bot, state: FSMContext):
                 data = response.json()
                 questions = data['questions']
                 data = await state.get_data()
-                student_id = data['survey_id']
+                student_id = data['student_id']
                 await state.update_data(student_id=student_id)
                 await start_first_question(call, state, questions)
 
